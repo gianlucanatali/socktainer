@@ -16,7 +16,7 @@ struct ContainerArchiveRouteTests {
             getResult: .success(
                 (
                     Data("fake-tar".utf8),
-                    PathStat(name: "passwd", size: 19, mode: 0o644, mtime: "2026-01-01T00:00:00Z", linkTarget: nil)
+                    PathStat(name: "passwd", size: 19, mode: 0o644, mtime: "2026-01-01T00:00:00Z", linkTarget: "")
                 )))
         let snapshot = try makeContainerSnapshot(nativeId: "web", ip: "192.168.65.2", network: "bridge", labels: [:], status: .stopped)
 
@@ -36,7 +36,7 @@ struct ContainerArchiveRouteTests {
             getResult: .success(
                 (
                     Data("fake-tar".utf8),
-                    PathStat(name: "passwd", size: 19, mode: 0o644, mtime: "2026-01-01T00:00:00Z", linkTarget: nil)
+                    PathStat(name: "passwd", size: 19, mode: 0o644, mtime: "2026-01-01T00:00:00Z", linkTarget: "")
                 )))
         let snapshot = try makeContainerSnapshot(nativeId: "web", ip: "192.168.65.2", network: "bridge", labels: [:], status: .stopped)
 
@@ -55,7 +55,7 @@ struct ContainerArchiveRouteTests {
             getResult: .success(
                 (
                     Data("fake-tar".utf8),
-                    PathStat(name: "passwd", size: 19, mode: 0o644, mtime: "2026-01-01T00:00:00Z", linkTarget: nil)
+                    PathStat(name: "passwd", size: 19, mode: 0o644, mtime: "2026-01-01T00:00:00Z", linkTarget: "")
                 )))
 
         try await withArchiveApp(snapshot: nil, archive: archive) { app in
