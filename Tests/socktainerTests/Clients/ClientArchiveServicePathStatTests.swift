@@ -1,4 +1,5 @@
-import ContainerClient
+import ContainerAPIClient
+import ContainerResource
 import ContainerizationEXT4
 import ContainerizationOCI
 import Foundation

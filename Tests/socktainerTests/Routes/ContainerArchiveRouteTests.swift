@@ -133,6 +133,12 @@ private struct FakeArchiveClient: ClientArchiveProtocol {
         throw ClientArchiveError.operationFailed(message: "unreachable")
     }
 
+    func statPath(container: ContainerSnapshot, path: String) async throws -> PathStat {
+        if case .failure(let error) = getResult { throw error }
+        if case .success(let value) = getResult { return value.stat }
+        throw ClientArchiveError.operationFailed(message: "unreachable")
+    }
+
     func putArchive(container: ContainerSnapshot, path: String, tarPath: URL, noOverwriteDirNonDir: Bool) async throws {}
 
     func exportRootfs(containerId: String) async throws -> URL {
