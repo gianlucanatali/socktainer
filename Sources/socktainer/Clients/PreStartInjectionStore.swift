@@ -1,5 +1,25 @@
 import ContainerResource
 import Foundation
+import Logging
+
+/// A staged upload could not be read back or recorded.
+///
+/// Reported rather than absorbed: a manifest that cannot be read means the
+/// container is about to start without files a client was told it had, and an
+/// empty list is indistinguishable from having staged nothing.
+enum PreStartInjectionError: Error, CustomStringConvertible {
+    case unreadableManifest(containerId: String, underlying: Error)
+    case unrecordedCreateOptions(underlying: Error)
+
+    var description: String {
+        switch self {
+        case .unreadableManifest(let id, let underlying):
+            return "Staged files for container \(id) could not be read: \(underlying)"
+        case .unrecordedCreateOptions(let underlying):
+            return "Container create options could not be recorded: \(underlying)"
+        }
+    }
+}
 
 /// Files copied into a container that had never been started.
 ///
@@ -20,29 +40,38 @@ actor PreStartInjectionStore {
     private var autoRemove: [String: Bool] = [:]
     private var autoRemoveURL: URL?
 
-    func configure(storageDirectory: URL) {
+    func configure(storageDirectory: URL, logger: Logger) {
         stagingRoot = storageDirectory.appendingPathComponent("socktainer-prestart")
         let url = storageDirectory.appendingPathComponent("socktainer-prestart-create-options.json")
         autoRemoveURL = url
-        if let data = try? Data(contentsOf: url) {
-            autoRemove = (try? JSONDecoder().decode([String: Bool].self, from: data)) ?? [:]
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        do {
+            autoRemove = try JSONDecoder().decode([String: Bool].self, from: Data(contentsOf: url))
+        } catch {
+            // Startup continues: the options only affect containers rebuilt later,
+            // and refusing to serve at all would be a worse answer than losing them.
+            logger.error("Recorded container create options are unusable: \(error)")
         }
     }
 
     /// Remember what the container was created with, so a container rebuilt to
     /// carry these files is rebuilt the same way.
-    func rememberCreateOptions(containerId: String, autoRemove remove: Bool) {
+    func rememberCreateOptions(containerId: String, autoRemove remove: Bool) throws {
         autoRemove[containerId] = remove
-        persistCreateOptions()
+        try persistCreateOptions()
     }
 
     func createOptions(containerId: String) -> ContainerCreateOptions {
         ContainerCreateOptions(autoRemove: autoRemove[containerId] ?? false)
     }
 
-    private func persistCreateOptions() {
+    private func persistCreateOptions() throws {
         guard let autoRemoveURL else { return }
-        try? JSONEncoder().encode(autoRemove).write(to: autoRemoveURL)
+        do {
+            try JSONEncoder().encode(autoRemove).write(to: autoRemoveURL)
+        } catch {
+            throw PreStartInjectionError.unrecordedCreateOptions(underlying: error)
+        }
     }
 
     private func containerRoot(_ id: String) -> URL? {
@@ -53,14 +82,20 @@ actor PreStartInjectionStore {
         containerRoot(id)?.appendingPathComponent("manifest.json")
     }
 
-    func pending(containerId: String) -> [StagedFile] {
-        guard let url = manifestURL(containerId), let data = try? Data(contentsOf: url) else { return [] }
-        return (try? JSONDecoder().decode([StagedFile].self, from: data)) ?? []
+    func pending(containerId: String) throws -> [StagedFile] {
+        guard let url = manifestURL(containerId), FileManager.default.fileExists(atPath: url.path) else {
+            return []
+        }
+        do {
+            return try JSONDecoder().decode([StagedFile].self, from: Data(contentsOf: url))
+        } catch {
+            throw PreStartInjectionError.unreadableManifest(containerId: containerId, underlying: error)
+        }
     }
 
     /// The staged files as mounts, ready to be added to a container's configuration.
-    func mounts(containerId: String) -> [Filesystem] {
-        pending(containerId: containerId).map {
+    func mounts(containerId: String) throws -> [Filesystem] {
+        try pending(containerId: containerId).map {
             .virtiofs(source: $0.hostPath, destination: $0.guestPath, options: [])
         }
     }
@@ -80,19 +115,22 @@ actor PreStartInjectionStore {
         try FileManager.default.setAttributes(
             [.posixPermissions: NSNumber(value: mode & 0o777)], ofItemAtPath: destination.path)
 
-        var files = pending(containerId: containerId).filter { $0.guestPath != guestPath }
+        var files = try pending(containerId: containerId).filter { $0.guestPath != guestPath }
         files.append(StagedFile(guestPath: guestPath, hostPath: destination.path))
         if let manifest = manifestURL(containerId) {
             try JSONEncoder().encode(files).write(to: manifest)
         }
     }
 
-    func clear(containerId: String) {
+    func clear(containerId: String) throws {
         if let root = containerRoot(containerId) {
+            // Cleanup only: a staging directory that outlives its container is
+            // reclaimed on the next stage, and refusing the delete over it would
+            // strand the container instead.
             try? FileManager.default.removeItem(at: root)
         }
         if autoRemove.removeValue(forKey: containerId) != nil {
-            persistCreateOptions()
+            try persistCreateOptions()
         }
     }
 }

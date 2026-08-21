@@ -278,7 +278,6 @@ struct ClientContainerService: ClientContainerProtocol {
         }
     }
 
-
     /// Rebuild a container so it carries the files copied into it before it was
     /// ever started.
     ///
@@ -287,7 +286,7 @@ struct ClientContainerService: ClientContainerProtocol {
     /// again with the mounts included. The name is kept, and the creation
     /// timestamp travels in a label, so the id the client holds does not change.
     private func applyPreStartInjections(container: ContainerSnapshot) async throws {
-        let staged = await PreStartInjectionStore.shared.mounts(containerId: container.id)
+        let staged = try await PreStartInjectionStore.shared.mounts(containerId: container.id)
         guard !staged.isEmpty else { return }
 
         var configuration = container.configuration
@@ -406,7 +405,7 @@ struct ClientContainerService: ClientContainerProtocol {
     }
 
     func delete(id: String) async throws {
-        await PreStartInjectionStore.shared.clear(containerId: id)
+        try await PreStartInjectionStore.shared.clear(containerId: id)
         guard let container = try await getContainer(id: id) else {
             throw ClientContainerError.notFound(id: id)
         }

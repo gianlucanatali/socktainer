@@ -672,7 +672,7 @@ extension ContainerCreateRoute {
             do {
                 let containerClient = ContainerClient()
                 try await containerClient.create(configuration: containerConfiguration, options: options, kernel: kernel)
-                await PreStartInjectionStore.shared.rememberCreateOptions(
+                try await PreStartInjectionStore.shared.rememberCreateOptions(
                     containerId: containerConfiguration.id, autoRemove: options.autoRemove)
                 container = try await containerClient.get(id: containerConfiguration.id)
                 req.logger.debug("Container created successfully with ID: \(container.id)")
