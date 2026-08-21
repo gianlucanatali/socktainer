@@ -491,7 +491,12 @@ extension ContainerCreateRoute {
                     req.logger.warning("Could not start DNS container for \(firstNetwork): \(error)")
                 }
             }
-            containerConfiguration.labels = containerLabels
+            var labelsWithTimestamp = containerLabels
+            // Stamp the creation time so the Docker-facing id stays the same if
+            // the container is later rebuilt to carry pre-start files.
+            labelsWithTimestamp[AppleContainerTimestampResolver.legacyCreationTimestampLabel] =
+                String(Date().timeIntervalSince1970)
+            containerConfiguration.labels = labelsWithTimestamp
 
             var resolvedMounts: [Filesystem] = []
 
@@ -667,6 +672,8 @@ extension ContainerCreateRoute {
             do {
                 let containerClient = ContainerClient()
                 try await containerClient.create(configuration: containerConfiguration, options: options, kernel: kernel)
+                await PreStartInjectionStore.shared.rememberCreateOptions(
+                    containerId: containerConfiguration.id, autoRemove: options.autoRemove)
                 container = try await containerClient.get(id: containerConfiguration.id)
                 req.logger.debug("Container created successfully with ID: \(container.id)")
             } catch {

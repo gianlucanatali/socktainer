@@ -278,12 +278,48 @@ struct ClientContainerService: ClientContainerProtocol {
         }
     }
 
+
+    /// Rebuild a container so it carries the files copied into it before it was
+    /// ever started.
+    ///
+    /// There is no API to add a mount to a container that already exists, so the
+    /// only way to put the files where the guest will see them is to create it
+    /// again with the mounts included. The name is kept, and the creation
+    /// timestamp travels in a label, so the id the client holds does not change.
+    private func applyPreStartInjections(container: ContainerSnapshot) async throws {
+        let staged = await PreStartInjectionStore.shared.mounts(containerId: container.id)
+        guard !staged.isEmpty else { return }
+
+        var configuration = container.configuration
+        let existing = Set(configuration.mounts.map(\.destination))
+        let additions = staged.filter { !existing.contains($0.destination) }
+        guard !additions.isEmpty else { return }
+        configuration.mounts.append(contentsOf: additions)
+        let rebuilt = configuration
+
+        let kernel = try await ClientKernel.getDefaultKernel(for: .current)
+        let options = await PreStartInjectionStore.shared.createOptions(containerId: container.id)
+
+        try await containerClient.withClient { try await $0.delete(id: container.id, force: true) }
+        do {
+            try await containerClient.withClient {
+                try await $0.create(configuration: rebuilt, options: options, kernel: kernel)
+            }
+        } catch {
+            // The container is gone and could not be put back. Say so plainly:
+            // a client told only that start failed would look everywhere else.
+            throw ClientContainerError.notFound(id: container.id)
+        }
+    }
+
     private func startInternal(container: ContainerSnapshot) async throws {
         let stdin: FileHandle? = nil
         let stdout: FileHandle? = nil
         let stderr: FileHandle? = nil
 
         let stdio = [stdin, stdout, stderr]
+
+        try await applyPreStartInjections(container: container)
 
         do {
             let process = try await containerClient.withClient { try await $0.bootstrap(id: container.id, stdio: stdio) }
@@ -370,6 +406,7 @@ struct ClientContainerService: ClientContainerProtocol {
     }
 
     func delete(id: String) async throws {
+        await PreStartInjectionStore.shared.clear(containerId: id)
         guard let container = try await getContainer(id: id) else {
             throw ClientContainerError.notFound(id: id)
         }
