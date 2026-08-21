@@ -444,6 +444,9 @@ extension BuildRoute {
             buildArgs: buildArgs,
             // TODO: Implement secrets once integration with buildkit materializes
             secrets: [:],
+            // Same as secrets: the Docker API's SSH forwarding for builds is not
+            // wired through yet, so nothing is offered to the builder.
+            ssh: "",
             contextDir: contextDir,
             dockerfile: dockerfileData,
             dockerignore: nil,
