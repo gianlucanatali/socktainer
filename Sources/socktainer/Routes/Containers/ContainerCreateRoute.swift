@@ -627,9 +627,12 @@ extension ContainerCreateRoute {
                     // Strip /lost+found when PGDATA is set (any value) — that
                     // reliably signals a Postgres container, and named volumes are
                     // always mounted at their root so /lost+found is always reachable.
+                    // An empty volume is rebuilt by the copy-up below, which drops
+                    // /lost+found as part of it; the reformat here would be undone.
                     if VolumeImageCleaner.isPostgresDataVolume(mergedEnv: mergedEnv),
                         volume.format == "ext4",
-                        VolumeImageCleaner.isEnabled(labels: volume.labels)
+                        VolumeImageCleaner.isEnabled(labels: volume.labels),
+                        !VolumeCopyUp.isEmpty(volumeImagePath: volume.source)
                     {
                         VolumeImageCleaner.removeLostFound(imagePath: volume.source, logger: req.logger)
                     }
