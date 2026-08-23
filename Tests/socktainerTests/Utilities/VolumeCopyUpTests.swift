@@ -92,6 +92,11 @@ final class VolumeCopyUpTests {
                 mode: EXT4.Inode.Mode(.S_IFLNK, 0o777))
         }
 
+        // The fixture has to hold a symlink before the copy can be blamed for one.
+        let sourceReader = try EXT4.EXT4Reader(blockDevice: FilePath(fixture.rootfs.path))
+        let (_, sourceLink) = try sourceReader.stat(FilePath("/data/link"), followSymlinks: false)
+        #expect(sourceLink.isSymlink)
+
         try VolumeCopyUp.populate(
             volumeImagePath: fixture.volume.path, fromRootfs: fixture.rootfs.path,
             sourcePath: "/data", logger: logger)
