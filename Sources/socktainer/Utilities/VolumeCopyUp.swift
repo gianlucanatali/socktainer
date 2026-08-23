@@ -135,8 +135,9 @@ enum VolumeCopyUp {
         of inode: EXT4.Inode, at path: FilePath, from reader: EXT4.EXT4Reader
     ) -> String? {
         if inode.size < 60 {
-            let bytes = EXT4.tupleToArray(inode.block)
-            return String(bytes: bytes.prefix(Int(inode.size)), encoding: .utf8)
+            var block = inode.block
+            let bytes = withUnsafeBytes(of: &block) { Array($0.prefix(Int(inode.size))) }
+            return String(bytes: bytes, encoding: .utf8)
         }
         guard let data = try? reader.readFile(at: path, followSymlinks: false) else { return nil }
         return String(data: data, encoding: .utf8)
