@@ -88,7 +88,7 @@ final class VolumeCopyUpTests {
             try formatter.create(path: FilePath("/data/nested"), mode: EXT4.Inode.Mode(.S_IFDIR, 0o755))
             try fixture.writeFile(formatter, "/data/nested/deep.txt", "deep\n", mode: 0o644)
             try formatter.create(
-                path: FilePath("/data/link"), link: FilePath("nested/deep.txt"),
+                path: FilePath("/data/link"), link: FilePath("/nested/deep.txt"),
                 mode: EXT4.Inode.Mode(.S_IFLNK, 0o777))
         }
 
