@@ -375,6 +375,15 @@ struct ClientArchiveService: ClientArchiveProtocol {
         let rootfsPath = getRootfsPath(containerId: container.id)
 
         guard FileManager.default.fileExists(atPath: rootfsPath.path) else {
+            // Never booted: hold the files until the runtime builds the
+            // filesystem, rather than refuse a copy Docker would accept.
+            if container.startedDate == nil {
+                try await stagePreStartInjection(
+                    container: container, destinationPath: normalizedPath, tarPath: tarPath)
+                return
+            }
+            // Booted before and the rootfs is gone: staging would quietly
+            // resurrect the container carrying only these files.
             throw ClientArchiveError.rootfsNotFound(id: container.id)
         }
 
@@ -391,6 +400,46 @@ struct ClientArchiveService: ClientArchiveProtocol {
             destinationPath: normalizedPath,
             inputTarPath: tarPath
         )
+    }
+
+    /// Hold an archive uploaded before the container was ever started.
+    ///
+    /// Only regular files: a directory would need a whole-directory mount,
+    /// which hides what the image put there, and a symlink has no mount that
+    /// reproduces it. Both are refused while the copy can still be retried
+    /// after start.
+    private func stagePreStartInjection(
+        container: ContainerSnapshot, destinationPath: String, tarPath: URL
+    ) async throws {
+        let plan = try parseArchiveEntries(tarPath: tarPath, destinationPath: destinationPath)
+        for entry in plan {
+            if case .symlink = entry.kind {
+                throw ClientArchiveError.operationFailed(
+                    message: "cannot copy a symlink into \(container.id) before it starts")
+            }
+            if case .directory = entry.kind {
+                throw ClientArchiveError.operationFailed(
+                    message: "cannot copy a directory into \(container.id) before it starts")
+            }
+        }
+
+        let stagingDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("prestart-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: stagingDir) }
+        try FileManager.default.createDirectory(at: stagingDir, withIntermediateDirectories: true)
+        try ArchiveUtility.extract(tarPath: tarPath, to: stagingDir)
+
+        for entry in plan {
+            guard case .file = entry.kind else { continue }
+            let extracted = stagingDir.appendingPathComponent(entry.relativePath)
+            guard FileManager.default.fileExists(atPath: extracted.path) else {
+                throw ClientArchiveError.operationFailed(
+                    message: "archive entry missing after extraction: \(entry.relativePath)")
+            }
+            try await PreStartInjectionStore.shared.stage(
+                containerId: container.id, guestPath: entry.guestPath,
+                source: extracted, mode: entry.mode)
+        }
     }
 
     /// One parsed entry of the uploaded archive.
