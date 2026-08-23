@@ -690,7 +690,7 @@ extension ContainerCreateRoute {
                 }
                 container = try await containerClient.get(id: containerConfiguration.id)
                 req.logger.debug("Container created successfully with ID: \(container.id)")
-                populateEmptyVolumes(copyUpCandidates, for: container, logger: req.logger)
+                ContainerCreateRoute.populateEmptyVolumes(copyUpCandidates, for: container, logger: req.logger)
             } catch {
                 req.logger.error("Failed to create container: \(error)")
                 throw Abort(.internalServerError, reason: "Failed to create container: \(error)")
@@ -812,7 +812,7 @@ extension ContainerCreateRoute {
     /// the container exists, since that is when its rootfs can be read, and always
     /// before it starts. Best-effort: a volume that cannot be prepared is left as
     /// it was rather than failing the creation.
-    func populateEmptyVolumes(
+    static func populateEmptyVolumes(
         _ candidates: [(source: String, destination: String)],
         for container: ContainerSnapshot,
         logger: Logger
