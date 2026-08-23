@@ -671,9 +671,17 @@ extension ContainerCreateRoute {
             let container: ContainerSnapshot
             do {
                 let containerClient = ContainerClient()
-                try await containerClient.create(configuration: containerConfiguration, options: options, kernel: kernel)
+                // Recorded before the container exists: recording afterwards turns a
+                // creation that happened into a reported failure, and the retry then
+                // collides with the name.
                 try await PreStartInjectionStore.shared.rememberCreateOptions(
                     containerId: containerConfiguration.id, autoRemove: options.autoRemove)
+                do {
+                    try await containerClient.create(configuration: containerConfiguration, options: options, kernel: kernel)
+                } catch {
+                    try? await PreStartInjectionStore.shared.clear(containerId: containerConfiguration.id)
+                    throw error
+                }
                 container = try await containerClient.get(id: containerConfiguration.id)
                 req.logger.debug("Container created successfully with ID: \(container.id)")
             } catch {

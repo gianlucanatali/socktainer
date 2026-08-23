@@ -41,6 +41,26 @@ struct PreStartInjectionStoreTests {
         #expect(mounts.first?.destination == "/etc/keys/service.key")
     }
 
+    @Test("staging the same path again replaces it and keeps one entry")
+    func restagingReplacesInPlace() async throws {
+        let storage = temporaryStorage()
+        defer { try? FileManager.default.removeItem(at: storage) }
+        let first = storage.appendingPathComponent("first")
+        let second = storage.appendingPathComponent("second")
+        try Data("one".utf8).write(to: first)
+        try Data("two".utf8).write(to: second)
+
+        let store = PreStartInjectionStore()
+        await store.configure(storageDirectory: storage, logger: Logger(label: "test"))
+        try await store.stage(containerId: "c1", guestPath: "/etc/k", source: first, mode: 0o600)
+        try await store.stage(containerId: "c1", guestPath: "/etc/k", source: second, mode: 0o600)
+
+        let staged = try await store.pending(containerId: "c1")
+        #expect(staged.count == 1)
+        let contents = try Data(contentsOf: URL(fileURLWithPath: staged[0].hostPath))
+        #expect(String(decoding: contents, as: UTF8.self) == "two")
+    }
+
     @Test("an unreadable manifest is reported, not read as nothing staged")
     func unreadableManifestThrows() async throws {
         let storage = temporaryStorage()

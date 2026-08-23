@@ -405,11 +405,14 @@ struct ClientContainerService: ClientContainerProtocol {
     }
 
     func delete(id: String) async throws {
-        try await PreStartInjectionStore.shared.clear(containerId: id)
         guard let container = try await getContainer(id: id) else {
             throw ClientContainerError.notFound(id: id)
         }
         try await containerClient.withClient { try await $0.delete(id: container.id) }
+        // After the delete, and by the native id: the reference a client holds may
+        // be a derived Docker id, and a delete that failed leaves a container that
+        // still needs its uploads.
+        try await PreStartInjectionStore.shared.clear(containerId: container.id)
     }
 
     // Poll until the container is no longer running, then return the real exit

@@ -108,12 +108,19 @@ actor PreStartInjectionStore {
         let destination = root.appendingPathComponent("files").appendingPathComponent(relative)
         try FileManager.default.createDirectory(
             at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.removeItem(at: destination)
+        // Staged into place only once the copy is on disk: removing the previous
+        // file first would lose an upload the container had already accepted if
+        // the copy then failed.
+        let incoming = destination.appendingPathExtension("incoming-\(UUID().uuidString)")
+        try FileManager.default.copyItem(at: source, to: incoming)
+        do {
+            try FileManager.default.setAttributes(
+                [.posixPermissions: NSNumber(value: mode & 0o777)], ofItemAtPath: incoming.path)
+            _ = try FileManager.default.replaceItemAt(destination, withItemAt: incoming)
+        } catch {
+            try? FileManager.default.removeItem(at: incoming)
+            throw error
         }
-        try FileManager.default.copyItem(at: source, to: destination)
-        try FileManager.default.setAttributes(
-            [.posixPermissions: NSNumber(value: mode & 0o777)], ofItemAtPath: destination.path)
 
         var files = try pending(containerId: containerId).filter { $0.guestPath != guestPath }
         files.append(StagedFile(guestPath: guestPath, hostPath: destination.path))

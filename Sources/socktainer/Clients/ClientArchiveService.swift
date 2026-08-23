@@ -264,6 +264,10 @@ struct ClientArchiveService: ClientArchiveProtocol {
                 throw ClientArchiveError.operationFailed(
                     message: "cannot copy a symlink into \(container.id) before it starts")
             }
+            if case .directory = entry.kind {
+                throw ClientArchiveError.operationFailed(
+                    message: "cannot copy a directory into \(container.id) before it starts")
+            }
         }
 
         let stagingDir = FileManager.default.temporaryDirectory
