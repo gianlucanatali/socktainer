@@ -106,9 +106,7 @@ enum VolumeCopyUp {
                     of: child, from: reader, into: formatter,
                     at: childTarget, linked: &linked, logger: logger)
             } else if inode.isSymlink {
-                guard let data = try? reader.readFile(at: child, followSymlinks: false),
-                    let link = String(data: data, encoding: .utf8)
-                else {
+                guard let link = symlinkTarget(of: inode, at: child, from: reader) else {
                     logger.warning("[volume-copyup] unreadable symlink skipped: \(child)")
                     continue
                 }
@@ -129,6 +127,19 @@ enum VolumeCopyUp {
             }
             if inode.linksCount > 1 { linked[inodeNumber] = childTarget }
         }
+    }
+
+    /// A short target is stored in the inode's block array rather than in a data
+    /// block, and only the longer form can be read back as file contents.
+    private static func symlinkTarget(
+        of inode: EXT4.Inode, at path: FilePath, from reader: EXT4.EXT4Reader
+    ) -> String? {
+        if inode.size < 60 {
+            let bytes = EXT4.tupleToArray(inode.block)
+            return String(bytes: bytes.prefix(Int(inode.size)), encoding: .utf8)
+        }
+        guard let data = try? reader.readFile(at: path, followSymlinks: false) else { return nil }
+        return String(data: data, encoding: .utf8)
     }
 
     private static func timestamps(of inode: EXT4.Inode) -> FileTimestamps {
