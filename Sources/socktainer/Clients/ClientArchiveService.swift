@@ -149,7 +149,7 @@ struct ClientArchiveService: ClientArchiveProtocol {
             size: inode.size,
             mode: UInt32(inode.mode),
             mtime: ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: TimeInterval(inode.mtime))),
-            linkTarget: inode.isSymlink ? readSymlinkTarget(reader: reader, path: normalizedPath) : nil
+            linkTarget: inode.isSymlink ? (readSymlinkTarget(reader: reader, path: normalizedPath) ?? "") : ""
         )
     }
 
@@ -179,7 +179,7 @@ struct ClientArchiveService: ClientArchiveProtocol {
             size: inode.size,
             mode: UInt32(inode.mode),
             mtime: ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: TimeInterval(inode.mtime))),
-            linkTarget: inode.isSymlink ? readSymlinkTarget(reader: reader, path: normalizedPath) : nil
+            linkTarget: inode.isSymlink ? (readSymlinkTarget(reader: reader, path: normalizedPath) ?? "") : ""
         )
 
         // Create temporary directory for tar creation
