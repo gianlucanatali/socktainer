@@ -18,7 +18,7 @@ struct ClientArchiveServiceStatPathTests {
         try fixture.writeExt4Rootfs(containerId: "web", files: ["/hello.txt": "exported\n"])
 
         let stat = try await fixture.service.statPath(container: fixture.makeContainer(id: "web"), path: "/hello.txt")
-        let (_, viaArchive) = try await fixture.service.getArchive(containerId: "web", path: "/hello.txt")
+        let (_, viaArchive) = try await fixture.service.getArchive(container: fixture.makeContainer(id: "web"), path: "/hello.txt")
 
         #expect(stat.name == viaArchive.name)
         #expect(stat.size == viaArchive.size)
@@ -33,7 +33,7 @@ struct ClientArchiveServiceStatPathTests {
         try fixture.writeExt4Rootfs(containerId: "web", files: ["/etc/hostname": "web\n"])
 
         let stat = try await fixture.service.statPath(container: fixture.makeContainer(id: "web"), path: "/etc")
-        let (_, viaArchive) = try await fixture.service.getArchive(containerId: "web", path: "/etc")
+        let (_, viaArchive) = try await fixture.service.getArchive(container: fixture.makeContainer(id: "web"), path: "/etc")
 
         #expect(stat.name == viaArchive.name)
         #expect(stat.mode == viaArchive.mode)
