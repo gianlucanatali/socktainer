@@ -494,6 +494,9 @@ extension ContainerCreateRoute {
             containerConfiguration.labels = containerLabels
 
             var resolvedMounts: [Filesystem] = []
+            // Named volumes worth a copy-up, collected here and populated once the
+            // container exists: the image's contents are only reachable from it.
+            var copyUpCandidates: [(source: String, destination: String)] = []
 
             // Docker creates missing bind-mount source directories on the host automatically.
             // Parser.mounts() validates that the source path exists and throws if not, so we
@@ -619,9 +622,12 @@ extension ContainerCreateRoute {
                     // Strip /lost+found when PGDATA is set (any value) — that
                     // reliably signals a Postgres container, and named volumes are
                     // always mounted at their root so /lost+found is always reachable.
+                    // An empty volume is rebuilt by the copy-up below, which drops
+                    // /lost+found as part of it; reformatting here would be undone.
                     if VolumeImageCleaner.isPostgresDataVolume(mergedEnv: mergedEnv),
                         volume.format == "ext4",
-                        VolumeImageCleaner.isEnabled(labels: volume.labels)
+                        VolumeImageCleaner.isEnabled(labels: volume.labels),
+                        !VolumeCopyUp.isEmpty(volumeImagePath: volume.source)
                     {
                         VolumeImageCleaner.removeLostFound(imagePath: volume.source, logger: req.logger)
                     }
@@ -640,6 +646,9 @@ extension ContainerCreateRoute {
                         options: parsed.options,
                         sync: syncMode
                     )
+                    if volume.format == "ext4" {
+                        copyUpCandidates.append((source: volume.source, destination: parsed.destination))
+                    }
                     resolvedMounts.append(volumeMount)
                 }
             }
@@ -669,6 +678,7 @@ extension ContainerCreateRoute {
                 try await containerClient.create(configuration: containerConfiguration, options: options, kernel: kernel)
                 container = try await containerClient.get(id: containerConfiguration.id)
                 req.logger.debug("Container created successfully with ID: \(container.id)")
+                ContainerCreateRoute.populateEmptyVolumes(copyUpCandidates, for: container, logger: req.logger)
             } catch {
                 req.logger.error("Failed to create container: \(error)")
                 throw Abort(.internalServerError, reason: "Failed to create container: \(error)")
@@ -782,6 +792,37 @@ extension ContainerCreateRoute {
                 )
             }
             return result
+        }
+    }
+
+    /// Docker's copy-up: an empty named volume mounted over a path the image
+    /// populates takes that path's contents, ownership and permissions. Runs once
+    /// the container exists, which is when the image's filesystem can be read, and
+    /// always before it starts. Best-effort: a volume that cannot be prepared is
+    /// left as it was rather than failing the creation.
+    static func populateEmptyVolumes(
+        _ candidates: [(source: String, destination: String)],
+        for container: ContainerSnapshot,
+        logger: Logger
+    ) {
+        guard !candidates.isEmpty else { return }
+        let appSupport = URL(fileURLWithPath: "\(NSHomeDirectory())/Library/Application Support/com.apple.container")
+        guard
+            let rootfs = VolumeCopyUp.imageFilesystem(
+                containerId: container.id, appSupportPath: appSupport)
+        else { return }
+
+        for candidate in candidates where VolumeCopyUp.isEmpty(volumeImagePath: candidate.source) {
+            do {
+                try VolumeCopyUp.populate(
+                    volumeImagePath: candidate.source,
+                    fromRootfs: rootfs.path,
+                    sourcePath: candidate.destination,
+                    logger: logger
+                )
+            } catch {
+                logger.warning("[volume-copyup] \(candidate.destination) left empty: \(error)")
+            }
         }
     }
 
