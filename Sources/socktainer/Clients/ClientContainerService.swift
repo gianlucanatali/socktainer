@@ -544,6 +544,10 @@ struct ClientContainerService: ClientContainerProtocol {
         for container in containersToDelete {
             do {
                 try await containerClient.withClient { try await $0.delete(id: container.id) }
+                // Pruning reclaims a container, so it reclaims what was staged for
+                // it too: those files are whatever a client uploaded, secrets
+                // included.
+                try await PreStartInjectionStore.shared.clear(containerId: container.id)
                 deletedIds.append(container.id)
             } catch {
                 continue
