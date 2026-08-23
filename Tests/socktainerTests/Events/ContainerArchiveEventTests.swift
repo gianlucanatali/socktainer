@@ -163,13 +163,13 @@ private struct FakeArchiveClient: ClientArchiveProtocol {
         if case .failure(let error) = getResult { throw error }
         return (
             Data("fake-tar".utf8),
-            PathStat(name: "hosts", size: 8, mode: 0o644, mtime: "2026-01-01T00:00:00Z", linkTarget: nil)
+            PathStat(name: "hosts", size: 8, mode: 0o644, mtime: "2026-01-01T00:00:00Z", linkTarget: "")
         )
     }
 
     func statPath(containerId: String, path: String) async throws -> PathStat {
         if case .failure(let error) = statResult { throw error }
-        return PathStat(name: "hosts", size: 8, mode: 0o644, mtime: "2026-01-01T00:00:00Z", linkTarget: nil)
+        return PathStat(name: "hosts", size: 8, mode: 0o644, mtime: "2026-01-01T00:00:00Z", linkTarget: "")
     }
 
     func putArchive(container: ContainerSnapshot, path: String, tarPath: URL, noOverwriteDirNonDir: Bool) async throws {}
