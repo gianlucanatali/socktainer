@@ -180,7 +180,7 @@ struct ClientArchiveService: ClientArchiveProtocol {
     /// which case falling back to the image snapshot would silently serve
     /// stale image content. `startedDate` is the runtime's ground truth for
     /// "has booted" and gates the fallback.
-    private func resolveRootfsPath(container: ContainerSnapshot) throws -> URL {
+    func resolveRootfsPath(container: ContainerSnapshot) throws -> URL {
         let rootfsPath = getRootfsPath(containerId: container.id)
         guard !FileManager.default.fileExists(atPath: rootfsPath.path) else {
             return rootfsPath
