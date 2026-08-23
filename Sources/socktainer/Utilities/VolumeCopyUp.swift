@@ -61,6 +61,9 @@ enum VolumeCopyUp {
             gid: sourceInode.fullGid
         )
         try copyChildren(of: source, from: reader, into: formatter, at: FilePath("/"))
+        // A fresh EXT4 image always carries /lost+found; a Docker volume never does,
+        // and Postgres refuses a data directory that holds it.
+        try? formatter.unlink(path: FilePath("/lost+found"))
         try formatter.close()
 
         _ = try FileManager.default.replaceItemAt(destination, withItemAt: staging)
