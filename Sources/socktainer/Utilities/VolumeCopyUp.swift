@@ -167,10 +167,13 @@ enum VolumeCopyUp {
     }
 
     private static func timestamps(of inode: EXT4.Inode) -> FileTimestamps {
+        // ext4 keeps creation time in crtime; ctime is the inode's own change
+        // time and would be the wrong answer here. An image that never recorded
+        // one leaves it at zero, where the formatter's default is better.
         FileTimestamps(
             access: Date(timeIntervalSince1970: TimeInterval(inode.atime)),
             modification: Date(timeIntervalSince1970: TimeInterval(inode.mtime)),
-            creation: Date(timeIntervalSince1970: TimeInterval(inode.ctime))
+            creation: inode.crtime == 0 ? nil : Date(timeIntervalSince1970: TimeInterval(inode.crtime))
         )
     }
 }

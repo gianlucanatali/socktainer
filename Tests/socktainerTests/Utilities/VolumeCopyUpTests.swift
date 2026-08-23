@@ -125,6 +125,29 @@ final class VolumeCopyUpTests {
         #expect(try reader.readFile(at: FilePath("/big.bin")) == Data(payload.utf8))
     }
 
+    @Test("a second name for a file stays a hard link, not a second copy")
+    func copiesHardLinksAsLinks() throws {
+        let fixture = CopyUpFixture()
+        defer { fixture.cleanUp() }
+        try fixture.makeVolume()
+        try fixture.makeRootfs { formatter in
+            try formatter.create(path: FilePath("/data"), mode: EXT4.Inode.Mode(.S_IFDIR, 0o755))
+            try fixture.writeFile(formatter, "/data/original.txt", "shared\n", mode: 0o644)
+            try formatter.link(link: FilePath("/data/second.txt"), target: FilePath("/data/original.txt"))
+        }
+
+        try VolumeCopyUp.populate(
+            volumeImagePath: fixture.volume.path, fromRootfs: fixture.rootfs.path,
+            sourcePath: "/data", logger: logger)
+
+        let reader = try EXT4.EXT4Reader(blockDevice: FilePath(fixture.volume.path))
+        let (firstNumber, first) = try reader.stat(FilePath("/original.txt"))
+        let (secondNumber, _) = try reader.stat(FilePath("/second.txt"))
+        #expect(firstNumber == secondNumber)
+        #expect(first.linksCount == 2)
+        #expect(try reader.readFile(at: FilePath("/second.txt")) == Data("shared\n".utf8))
+    }
+
     @Test("an image with nothing at the mount path still yields a usable volume")
     func handlesMissingSourcePath() throws {
         let fixture = CopyUpFixture()
